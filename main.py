@@ -7,8 +7,49 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.firefox.options import Options
 
+#TODO: assync functions
+#TODO: page not found error
+def request_download_data(episode: dict):
+    url = r"https://vizertv.in/includes/ajax/publicFunctions.php"
+    payload = {'downloadData': 2, 'id': int(episode["id"])}
 
-def get_episodes_info(season: int, url: str, headless: bool = True):
+    response = requests.post(url, data=payload)
+
+    # check if response status code is valid before proceeding
+    if response.status_code != 200:
+        message = f"Unexpected status code for '{episode["episode-number"]}. {episode["title"]}': {response.status_code}"
+        raise requests.RequestException(message)
+
+    # get dictionary containing the response
+    response_json = response.json()
+
+    # get redirect links and subtitle link from response
+    for key in response_json:
+        entry: dict = response_json[key]
+        if "sub" in entry.keys(): 
+            orig_audio_redirect = entry["redirector"]
+            subtitles = entry["sub"]
+
+        else:
+            dub_audio_redirect = entry["redirector"]
+    
+    return orig_audio_redirect, dub_audio_redirect, subtitles
+
+def request_download_link(redirect_link: str):
+    response = requests.get(f"https://vizertv.in/{redirect_link}")
+    html = BeautifulSoup(response.content, 'html.parser')
+
+    download_link = re.search(r'window\.location\.href=\".*(mixdrop.+)\"', str(html))
+    if download_link:
+        download_link = f"https://{download_link.group(1)}?download"
+    
+    else:
+        message = f"Could not find a download on the given redirect link (https://vizertv.in/{redirect_link})."
+        raise requests.RequestException(message)
+    
+    return download_link
+
+def get_episodes_data(season: int, url: str, headless: bool = True):
     # set options
     options = Options()
     if headless:
@@ -59,12 +100,12 @@ def get_episodes_info(season: int, url: str, headless: bool = True):
             title_string = episode.find_element(By.CLASS_NAME, "tit").text
             episode_number, episode_title = title_string.split('.')
             episode_title = episode_title.strip()
-            episode_rating = episode.find_element(By.CLASS_NAME, "info").text
+            episode_info = episode.find_element(By.CLASS_NAME, "info").text
 
             episode_dict = {
                 "episode-number": episode_number,
                 "title": episode_title,
-                "rating": episode_rating,
+                "info": episode_info,
                 "id": episode_id
             }
             
@@ -75,46 +116,15 @@ def get_episodes_info(season: int, url: str, headless: bool = True):
     for index, episode in enumerate(season_dict["episodes"]):
         # make post request for the download data associated with the current episode 
         print(f"Requesting download data for '{episode["episode-number"]}. {episode["title"]}'.")
-        url = r"https://vizertv.in/includes/ajax/publicFunctions.php"
-        payload = {'downloadData': 2, 'id': int(episode["id"])}
-
-        response = requests.post(url, data=payload)
-
-        # check if response status code is valid before proceeding
-        if response.status_code != 200:
-            message = f"Unexpected status code for '{episode["episode-number"]}. {episode["title"]}': {response.status_code}"
-            raise requests.RequestException(message)
-
-        # get dictionary containing the response
-        response_json = response.json()
-
-        # get redirect links and subtitle link from response
-        for key in response_json:
-            entry: dict = response_json[key]
-            if "sub" in entry.keys(): 
-                orig_audio_redirect = entry["redirector"]
-                subtitles = entry["sub"]
-
-            else:
-                dub_audio_redirect = entry["redirector"]
+        orig_audio_redirect, dub_audio_redirect, subtitles = request_download_data(episode)
         
         # get original audio download link from redirector
         print("Requesting original audio download link.")
-        response = requests.get(f"https://vizertv.in/{orig_audio_redirect}")
-        html = BeautifulSoup(response.content, 'html.parser')
-
-        orig_audio_download_link = re.search(r'window\.location\.href=\".*(mixdrop.+)\"', str(html))
-        if orig_audio_download_link:
-            orig_audio_download_link = f"https://{orig_audio_download_link.group(1)}?download"
+        orig_audio_download_link = request_download_link(orig_audio_redirect)
         
         # get dubbed audio download link from redirector
         print("Requesting dubbed audio download link.")
-        response = requests.get(f"https://vizertv.in/{dub_audio_redirect}")
-        html = BeautifulSoup(response.content, 'html.parser')
-
-        dub_audio_download_link = re.search(r'window\.location\.href=\".*(mixdrop.+)\"', str(html))
-        if dub_audio_download_link:
-            dub_audio_download_link = f"https://{dub_audio_download_link.group(1)}?download"
+        dub_audio_download_link = request_download_link(dub_audio_redirect)
         
         # save data to season_dict
         download_dict = {
@@ -130,9 +140,9 @@ def get_episodes_info(season: int, url: str, headless: bool = True):
 
 
 if __name__ == "__main__":
-    season = 2
-    url = "https://vizertv.in/serie/online/doctor-who"
-    season_2 = get_episodes_info(season, url, headless=True)
+    season = 1
+    url = "https://vizertv.in/serie/online/sobrenatural"
+    season_2 = get_episodes_data(season, url, headless=True)
 
-    with open("output/doctor-who-s02.json", 'w') as file:
+    with open("output/supernatural-s01.json", 'w') as file:
         json.dump(season_2, file, indent=2)
