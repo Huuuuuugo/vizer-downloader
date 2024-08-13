@@ -5,7 +5,7 @@ import os
 
 import requests
 
-
+#TODO: add option to use original file name
 #TODO: create context manager for properly closing files
 class Download():
     """A class to manage the download of files, supporting resumable downloads and progress tracking.
@@ -39,7 +39,7 @@ class Download():
         
     download_list = []
 
-    def __init__(self, url: str, output_file: str):
+    def __init__(self, url: str, output_file: str, headers: dict | None = None):
         """Initializes a Download instance.
 
         Parameters:
@@ -85,8 +85,14 @@ class Download():
         self.is_running = False
         self._interrupt_download = False
 
+        if headers is None:
+            headers = {}
+        
+        else:
+            headers = headers.copy()
+
         # make a request to get the total size of the file
-        request_size = requests.get(url)
+        request_size = requests.get(url, headers=headers, stream=True)
         if request_size.status_code not in (200, 206):
             Download.stop_all()
             message = f"Unexpected status code when requesting file size: {request_size.status_code}."
@@ -103,12 +109,9 @@ class Download():
         
         # set range to resume download if any byte has already been written
         if self.written_bytes:
-            headers = {
+            headers.update({
                 "Range": f"bytes={self.written_bytes}-"
-            }
-
-        else:
-            headers = {}
+            })
 
         if self.written_bytes == self.total_size:
             self.response = request_size
@@ -133,6 +136,15 @@ class Download():
         """
 
         return self.written_bytes/(self.total_size/100)
+
+    @classmethod
+    def get_running_count(cls):
+        running_downloads = 0
+        for download in cls.download_list:
+            if download.is_running:
+                running_downloads += 1
+        
+        return running_downloads
     
     @classmethod
     def wait_downloads(cls, show_progress: bool = True):
@@ -250,13 +262,13 @@ class Download():
 
 if __name__ == "__main__":
     try:
-        download1 = Download(r"https://github.com/gorhill/uBlock/releases/download/1.59.0/uBlock0_1.59.0.firefox.signed.xpi", "uBlock0_1.59.0.firefox.signed.xpi")
-        download2 = Download(r"https://github.com/gorhill/uBlock/releases/download/1.59.0/uBlock0_1.59.0.firefox.signed.xpi", r"C:\Users\hugom\OneDrive\Área de Trabalho\adt\adt2\uBlock0_1.59.0.firefox.signed.xpi")
+        download1 = Download(r"https://github.com/NicolasCARPi/example-files/raw/master/example.aac", "example.aac")
+        download2 = Download(r"https://github.com/NicolasCARPi/example-files/raw/master/example.avi", "example.avi")
 
         download1.start()
         download2.start()
 
         Download.wait_downloads()
     
-    except KeyboardInterrupt:
+    finally:
         Download.stop_all()
