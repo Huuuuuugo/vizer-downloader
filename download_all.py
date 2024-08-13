@@ -77,40 +77,37 @@ if __name__ == "__main__":
 
     # start downloading
     def download_all(browser: uc.Chrome, download_key: str, extension: str, start_from: int = 1):
-        try:
-            for episode in season_dict["episodes"]:
-                # skip episode from before 'start_from'
-                if int(episode["episode-number"]) < start_from:
-                    continue
+        for episode in season_dict["episodes"]:
+            # skip episode from before 'start_from'
+            if int(episode["episode-number"]) < start_from:
+                continue
 
-                # waits if there's at least 3 currently active downloads
-                while Download.get_running_count() >= 3:
-                    Download.wait_downloads()
-                
-                # get episode rating
-                rating = re.findall(r"([0-9]{1,2}\.[0-9]{1,2})", episode["info"])
-                if rating:
-                    rating = rating[0]
+            # waits if there's at least 3 currently active downloads
+            while Download.get_running_count() >= 3:
+                Download.wait_downloads()
+            
+            # get episode rating
+            rating = re.findall(r"([0-9]{1,2}\.[0-9]{1,2})", episode["info"])
+            if rating:
+                rating = rating[0]
 
-                else:
-                    rating = "?"
+            else:
+                rating = "?"
 
-                # get download url
-                url = episode["downloads"][download_key]
+            # get download url
+            url = episode["downloads"][download_key]
 
-                # get file name
-                file_name = f"{episode["episode-number"]}. {episode["title"]} ({rating}){extension}"
-                
-                # get download link
-                download_link = get_download_link_from_mixdrop(browser, url)
+            # get file name
+            file_name = f"{episode["episode-number"]}. {episode["title"]} ({rating}){extension}"
+            
+            # get download link
+            download_link = get_download_link_from_mixdrop(browser, url)
 
-                # start download
-                Download(download_link, f"{output_path}/{file_name}").start()
-
-        finally:
-            Download.stop_all()
+            # start download
+            Download(download_link, f"{output_path}/{file_name}").start()
     
-    download_all(browser, "dubbed-audio",".mp4", 7)
+    download_all(browser, "dubbed-audio",".mp4", 10)
+    Download.wait_downloads()
     
     # close browser instance
     browser.close()
