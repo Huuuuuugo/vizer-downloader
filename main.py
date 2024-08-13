@@ -92,7 +92,6 @@ def get_episodes_data(browser: uc.Chrome, season: int, url: str):
     # search for the button for the specified season and click it
     for season_btn in season_btn_list:
         season_number = re.match(r"^([0-9]+)", season_btn.text)
-        print(season_btn.text, season_number)
         if season_number:
             season_number = int(season_number.group(1))
 
@@ -169,11 +168,11 @@ def get_episodes_data(browser: uc.Chrome, season: int, url: str):
 
 if __name__ == "__main__":
     season = 1
-    url = "https://vizertv.in/serie/online/doctor-who"
+    url = "https://vizertv.in/serie/online/sobrenatural"
 
     browser = start_browser()
 
     season_dict = get_episodes_data(browser, season, url)
 
     browser.close()
-    browser.quit()
+    time.sleep(3)
