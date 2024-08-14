@@ -100,8 +100,14 @@ class Download():
             message = f"Unexpected status code when requesting file size: {request_size.status_code}."
             raise requests.RequestException(message)
         
-        self.total_size = int(request_size.headers['Content-Length'])
-        request_size.close()
+        try:
+            self.total_size = int(request_size.headers['Content-Length'])
+            request_size.close()
+
+        except KeyError:
+            message = f"The response has no 'Content-Length' header, resuming and progress tracking will not work. If the output file contains some data already, it will be completely cleared when 'start()' is called."
+            warnings.warn(message, UserWarning)
+            self.total_size = 0
 
         # get ammount of bytes already written before beggining
         if os.path.exists(output_file):
@@ -136,8 +142,11 @@ class Download():
         float
             The progress of the download as a percentage (0 to 100).
         """
+        if self.total_size:
+            return self.written_bytes/(self.total_size/100)
 
-        return self.written_bytes/(self.total_size/100)
+        else:
+            return 0
 
     @classmethod
     def get_running_count(cls):
@@ -241,6 +250,9 @@ class Download():
                     if self._interrupt_download:
                         self.written_bytes = os.path.getsize(self.output_file)
                         break
+                
+                if not self._interrupt_download:
+                    self.total_size = self.written_bytes
                     
             self.is_running = False
             self._interrupt_download = False
