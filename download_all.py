@@ -1,4 +1,5 @@
 import threading
+import warnings
 import random
 import json
 import time
@@ -9,33 +10,47 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.firefox.options import Options
-
 import undetected_chromedriver as uc
 
 from downloader import Download
 
+# rewrites the __del__ method to fix an oversight that throws an unnecessary warning every time Crhome.quit() is called
+class FixedChrome(uc.Chrome):
+    def __del__(self):
+        try:
+            self.quit()
+        except: #noqa
+            pass
+
 def start_browser():
-    print("Starting browser...")
-    # set options
-    options = uc.ChromeOptions()
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--disable-blink-features=AutomationControlled")
+    try:
+        print("Starting browser...")
+        browser = None
+        # set options
+        options = uc.ChromeOptions()
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--disable-blink-features=AutomationControlled")
 
-    # load uBlock
-    extension_dir = os.path.join(os.getcwd(), "uBlock")
-    options.add_argument(f"--load-extension={extension_dir}")
+        # load uBlock
+        extension_dir = os.path.join(os.getcwd(), "uBlock")
+        options.add_argument(f"--load-extension={extension_dir}")
 
-    browser = uc.Chrome(options=options)
-    browser.set_window_size(800, 600)
-    browser.implicitly_wait(15)
-    browser.minimize_window()
+        browser = FixedChrome(options=options)
+        browser.set_window_size(800, 600)
+        browser.implicitly_wait(15)
+        browser.minimize_window()
 
-    # wait for uBlock to load
-    time.sleep(5)
+        # wait for uBlock to load
+        time.sleep(5)
 
-    print("Browser started.")
-    return browser
+        print("Browser started.")
+        return browser
+
+    except KeyboardInterrupt:
+        print("Closing browser...")
+        if browser is not None:
+            browser.quit()
 
 def get_download_link_from_mixdrop(browser: uc.Chrome, url: str):
     # bring window into view
@@ -61,7 +76,7 @@ def get_download_link_from_mixdrop(browser: uc.Chrome, url: str):
 
 if __name__ == "__main__":
     # read json data
-    with open("output/Doctor Who S02.json", 'r') as file:
+    with open("output/Doctor Who S04.json", 'r') as file:
         season_dict = json.load(file)
     
     # get output path
@@ -72,43 +87,62 @@ if __name__ == "__main__":
     if not os.path.isdir(output_path):
         os.makedirs(output_path)
 
-    # start browser instance
-    browser = start_browser()
-
     # start downloading
-    def download_all(browser: uc.Chrome, download_key: str, extension: str, start_from: int = 1):
-        for episode in season_dict["episodes"]:
-            # skip episode from before 'start_from'
-            if int(episode["episode-number"]) < start_from:
-                continue
+    def download_all(download_key: str, extension: str, start_from: int = 1):
+        try:
+            # start browser instance
+            browser = None
+            browser = start_browser()
+            if browser is None:
+                return
 
-            # waits if there's at least 3 currently active downloads
-            while Download.get_running_count() >= 3:
-                Download.wait_downloads()
-            
-            # get episode rating
-            rating = re.findall(r"([0-9]{1,2}\.[0-9]{1,2})", episode["info"])
-            if rating:
-                rating = rating[0]
+            # creates a thread for showing downloads progress
+            def show_progress_thread():
+                while True:
+                    Download.show_all_progress()
+                    time.sleep(0.1)
+                    
+            threading.Thread(target=show_progress_thread, daemon=True).start()
 
-            else:
-                rating = "?"
+            # cycle through every episode on the json
+            for episode in season_dict["episodes"]:
+                # skip episode from before 'start_from'
+                if int(episode["episode-number"]) < start_from:
+                    continue
 
-            # get download url
-            url = episode["downloads"][download_key]
+                # waits if there's at least 3 currently active downloads
+                while Download.get_running_count() >= 3:
+                    time.sleep(0.1)
+                
+                # get episode rating
+                rating = re.findall(r"([0-9]{1,2}\.[0-9]{1,2})", episode["info"])
+                if rating:
+                    rating = rating[0]
 
-            # get file name
-            file_name = f"{episode["episode-number"]}. {episode["title"]} ({rating}){extension}"
-            
-            # get download link
-            download_link = get_download_link_from_mixdrop(browser, url)
+                else:
+                    rating = "?"
 
-            # start download
-            Download(download_link, f"{output_path}/{file_name}").start()
+                # get download url
+                url = episode["downloads"][download_key]
+
+                # get file name
+                file_name = f"{episode["episode-number"]}. {episode["title"]} ({rating}){extension}"
+                
+                # get download link
+                download_link = get_download_link_from_mixdrop(browser, url)
+
+                # start download
+                Download(download_link, f"{output_path}/{file_name}").start()
+        
+        except KeyboardInterrupt:
+            pass
+        
+        finally:
+            # close browser instance
+            if browser is not None:
+                browser.quit()
+        
+        # wait for the last downloads to finish
+        Download.wait_downloads(False)
     
-    download_all(browser, "dubbed-audio",".mp4", 10)
-    Download.wait_downloads()
-    
-    # close browser instance
-    browser.close()
-    time.sleep(3)
+    download_all("dubbed-audio", ".mp4")
