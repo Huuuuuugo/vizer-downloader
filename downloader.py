@@ -38,6 +38,8 @@ class Download():
     """
         
     download_list = []
+    _progress_lines_printed = 0
+    _progress_time_passed = 0
 
     def __init__(self, url: str, output_file: str, headers: dict | None = None):
         """Initializes a Download instance.
@@ -145,6 +147,28 @@ class Download():
                 running_downloads += 1
         
         return running_downloads
+
+    @classmethod
+    def show_all_progress(cls):
+        """Shows the progress of every download in the terminal. If called again in less than 1s, it updates the previous output.
+
+        Side Effects:
+        -------------
+        Updates the terminal output with the download progress.
+        """
+
+        # updates the previous output if the method has been called recently
+        if time.perf_counter() - cls._progress_time_passed <= 1.0005:
+            print("\033[A"* cls._progress_lines_printed, end='\r')
+
+        # reset the attributes related to the method
+        cls._progress_time_passed = time.perf_counter()
+        cls._progress_lines_printed = 0
+
+        # print one download per line
+        for download in cls.download_list:
+            print(f"{download.output_file}: {download.progress:.2f}")
+            cls._progress_lines_printed += 1
     
     @classmethod
     def wait_downloads(cls, show_progress: bool = True):
@@ -163,9 +187,6 @@ class Download():
         while True:
             wait = False
             for download in cls.download_list:
-                if show_progress:
-                    print(f"{download.output_file}: {download.progress:.2f}")
-
                 if download.progress >= 100:
                     continue
 
@@ -173,7 +194,7 @@ class Download():
                     wait = True
 
             if show_progress:
-                print("\033[A"* len(cls.download_list), end='\r')
+                cls.show_all_progress()
 
             if not wait:
                 break
