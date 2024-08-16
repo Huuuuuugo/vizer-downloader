@@ -349,7 +349,7 @@ if __name__ == "__main__":
                 download_key = 'original-audio'
                 extension = '.mp4'
             
-            case 'srt':
+            case 'sub':
                 download_key = 'subtitles'
                 extension = '.srt'
 
