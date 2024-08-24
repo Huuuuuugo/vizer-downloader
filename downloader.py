@@ -176,7 +176,16 @@ class Download():
 
         # print one download per line
         for download in cls.download_list:
-            print(f"{download.output_file}: {download.progress:.2f}")
+            file_name: str = download.output_file
+            if '/' in file_name:
+                file_name = file_name.rsplit('/', 1)[1]
+
+            if download.progress:
+                print(f"{file_name}: {download.progress:.2f}%     ")
+
+            else:
+                print(f"{file_name}: {(download.written_bytes/1000):.2f}mb/?mb")
+
             cls._progress_lines_printed += 1
     
     @classmethod
@@ -209,9 +218,6 @@ class Download():
                 break
             
             time.sleep(0.2)
-        
-        if show_progress:
-            print("\033[B" * len(Download.download_list), end='')
     
     @classmethod
     def stop_all(cls):
