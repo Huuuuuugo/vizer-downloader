@@ -1,4 +1,5 @@
 import threading
+import warnings
 import argparse
 import random
 import time
@@ -28,8 +29,10 @@ def start_browser():
     try:
         print("Starting browser...")
         browser = None
+
         # set options
         options = uc.ChromeOptions()
+        options.add_argument("--headless")
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
         options.add_argument("--disable-blink-features=AutomationControlled")
@@ -38,10 +41,15 @@ def start_browser():
         extension_dir = os.path.join(os.getcwd(), "uBlock")
         options.add_argument(f"--load-extension={extension_dir}")
 
+        # start browser
         browser = FixedChrome(options=options)
         browser.set_window_size(800, 600)
         browser.implicitly_wait(15)
         browser.minimize_window()
+
+        # set custom user agent
+        user_agent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36'
+        browser.execute_cdp_cmd('Network.setUserAgentOverride', {'userAgent': user_agent})
 
         # wait for uBlock to load
         time.sleep(5)
@@ -121,8 +129,6 @@ def get_download_link_from_mixdrop(browser: uc.Chrome, url: str):
         download_link = browser.find_element(By.CLASS_NAME, "download-btn").get_dom_attribute("href")
         time.sleep(0.5)
     
-    browser.minimize_window()
-
     return download_link
 
 def get_episodes_data(url: str, season: int):
@@ -172,7 +178,7 @@ def get_episodes_data(url: str, season: int):
         for episode in episode_list:
             episode_id = episode.get_dom_attribute("data-episode-id")
             title_string = episode.find_element(By.CLASS_NAME, "tit").text
-            episode_number, episode_title = title_string.split('.')
+            episode_number, episode_title = title_string.split('.', 1)
             episode_title = episode_title.strip()
             episode_info = episode.find_element(By.CLASS_NAME, "info").text
 
@@ -258,7 +264,8 @@ def download_all(json_path: str, output_path: str, download_key: str, extension:
             # skip episode from before 'start_from'
             if int(episode["episode-number"]) < start_from:
                 continue
-
+            
+            # break the loop at 'stop_at' episode
             elif stop_at is not None and int(episode["episode-number"]) > stop_at:
                 break
 
@@ -289,13 +296,17 @@ def download_all(json_path: str, output_path: str, download_key: str, extension:
 
             # start download
             if download_link is not None:
-                Download(download_link, f"{output_path}/{file_name}").start()
+                # filter warnnings to avoid breaking the progress printing
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    Download(download_link, f"{output_path}/{file_name}").start()
         
         browser.quit()
         browser = None
         
         # wait for the last downloads to finish
         Download.wait_downloads(False)
+        time.sleep(0.5) # wait for one last update on the show_progress_thread before finishing
     
     except KeyboardInterrupt:
         pass
