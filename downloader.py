@@ -6,7 +6,6 @@ import os
 import requests
 
 #TODO: add option to use original file name
-#TODO: create context manager for properly closing files
 class Download():
     """A class to manage the download of files, supporting resumable downloads and progress tracking.
 
@@ -39,7 +38,6 @@ class Download():
         
     download_list = []
     _progress_lines_printed = 0
-    _progress_time_passed = 0
 
     def __init__(self, url: str, output_file: str, headers: dict | None = None):
         """Initializes a Download instance.
@@ -158,8 +156,8 @@ class Download():
         return running_downloads
 
     @classmethod
-    def show_all_progress(cls):
-        """Shows the progress of every download in the terminal. If called again in less than 1s, it updates the previous output.
+    def show_all_progress(cls, update=False):
+        """Shows the progress of every download in the terminal.
 
         Side Effects:
         -------------
@@ -167,11 +165,10 @@ class Download():
         """
 
         # updates the previous output if the method has been called recently
-        if time.perf_counter() - cls._progress_time_passed <= 1.0005:
-            print("\033[A"* cls._progress_lines_printed, end='\r')
+        if update:
+            print("\033[A\033[K"* cls._progress_lines_printed, end='\r')
 
         # reset the attributes related to the method
-        cls._progress_time_passed = time.perf_counter()
         cls._progress_lines_printed = 0
 
         # print one download per line
@@ -184,7 +181,7 @@ class Download():
                 print(f"{file_name}: {download.progress:.2f}%     ")
 
             else:
-                print(f"{file_name}: {(download.written_bytes/1000):.2f}mb/?mb")
+                print(f"{file_name}: {(download.written_bytes/1000000):.2f}mb/?mb")
 
             cls._progress_lines_printed += 1
     
@@ -212,7 +209,7 @@ class Download():
                     wait = True
 
             if show_progress:
-                cls.show_all_progress()
+                cls.show_all_progress(True)
 
             if not wait:
                 break
@@ -300,14 +297,10 @@ class Download():
         
 
 if __name__ == "__main__":
-    try:
-        download1 = Download(r"https://github.com/NicolasCARPi/example-files/raw/master/example.aac", "example.aac")
-        download2 = Download(r"https://github.com/NicolasCARPi/example-files/raw/master/example.avi", "example.avi")
+    download1 = Download(r"https://github.com/NicolasCARPi/example-files/raw/master/example.aac", "example.aac")
+    download2 = Download(r"https://github.com/NicolasCARPi/example-files/raw/master/example.avi", "example.avi")
 
-        download1.start()
-        download2.start()
+    download1.start()
+    download2.start()
 
-        Download.wait_downloads()
-    
-    finally:
-        Download.stop_all()
+    Download.wait_downloads()
