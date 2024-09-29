@@ -164,7 +164,7 @@ def get_episodes_data(url: str, season: int):
             raise AttributeError(message)
 
         # get info from all episode from that season and the name of the series
-        episode_list = browser.find_element(By.XPATH, "/html/body/main/div[3]/div/div[3]/div[3]").find_elements(By.CSS_SELECTOR, "div.item[data-episode-id]:not(.unreleased)")
+        episode_list = browser.find_element(By.XPATH, "/html/body/main/div[3]/div/div[3]/div[3]").find_elements(By.CSS_SELECTOR, "div.item[data-episode-id]")
         series_name = browser.find_element(By.CSS_SELECTOR, "h2").text
         
         # set up dictionary for storing the informations from that season
@@ -232,7 +232,7 @@ def get_episodes_data(url: str, season: int):
         if browser is not None:
             browser.quit()
 
-def download_all(json_path: str, output_path: str, download_key: str, extension: str, start_from: int = 1, stop_at: int | None = None, max_downloads: int = 3):
+def download_all(json_path: str, output_path: str, download_key: str, extension: str, start_from: int = 0, stop_at: int | None = None, max_downloads: int = 3):
     # read json data
     with open(json_path, 'r') as file:
         season_dict = json.load(file)
@@ -279,7 +279,7 @@ def download_all(json_path: str, output_path: str, download_key: str, extension:
                 rating = rating[0]
 
             else:
-                rating = "?"
+                rating = "--"
 
             # get download url
             url = episode["downloads"][download_key]
@@ -337,7 +337,7 @@ if __name__ == "__main__":
     download_args.add_argument('-i', '--input', type=str, required=True, help="path to the json file containing the download data")
     download_args.add_argument('-k', '--key', required=True, choices=['dub', 'eng', 'sub'], help="key to the download link: 'dub' for dubbed, 'eng' for english, 'sub' for subtitles")
     download_args.add_argument('-o', '--output', default=(os.path.curdir).replace('\\', '/'), help="path where the files will be saved")
-    download_args.add_argument('--start-from', type=int, default=1, help="number of the episode to start downloading from")
+    download_args.add_argument('--start-from', type=int, default=0, help="number of the episode to start downloading from")
     download_args.add_argument('--stop-at', type=int, default=None, help="number of the episode to stop downloading at")
     download_args.add_argument('--max-downloads', type=int, default=3, help="number of maximum concurrent downloads")
 
